@@ -1,0 +1,56 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: intersectia
+      POSTGRES_PASSWORD: intersectia
+      POSTGRES_DB: intersectia
+    volumes:
+      - intersectia_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U intersectia -d intersectia"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ai:
+    build:
+      context: ../intersectia-ai
+    restart: unless-stopped
+    environment:
+      AI_INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-dev-internal-token}
+      AI_AWS_REGION: ${AWS_REGION:-us-east-1}
+    expose:
+      - "8000"
+
+  backend:
+    build:
+      context: ../intersectia-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      ai:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://intersectia:intersectia@db:5432/intersectia?schema=public
+      PORT: "3000"
+      AI_SERVICE_URL: http://ai:8000
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-dev-internal-token}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    command: sh -c "npx prisma migrate deploy && node dist/main"
+    ports:
+      - "3000:3000"
+
+  frontend:
+    build:
+      context: ../intersectia-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  intersectia_pgdata:

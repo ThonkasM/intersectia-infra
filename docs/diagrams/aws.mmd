@@ -1,0 +1,32 @@
+flowchart TB
+  internet((Internet))
+  route53[Route 53 / dominio opcional]
+  cf[CloudFront]
+  s3[(S3 frontend)]
+  alb[ALB]
+  subgraph vpc[VPC]
+    subgraph pub[Subredes publicas]
+      alb
+    end
+    subgraph priv[Subredes privadas]
+      subgraph ecs[ECS Fargate - task]
+        be[NestJS :3000]
+        ai[FastAPI :8000]
+      end
+      rds[(RDS PostgreSQL)]
+    end
+    nat[NAT Gateway]
+  end
+  sm[Secrets Manager]
+  ecr[ECR]
+  cw[CloudWatch Logs]
+
+  internet --> route53 --> cf
+  cf --> s3
+  cf -->|/api y socket.io| alb --> be
+  be -->|localhost:8000| ai
+  be --> rds
+  priv --> nat --> internet
+  ecs -.-> ecr
+  ecs -.-> sm
+  ecs -.-> cw

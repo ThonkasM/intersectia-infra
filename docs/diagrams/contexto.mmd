@@ -1,0 +1,14 @@
+flowchart LR
+  visitante([Visitante del taller])
+  subgraph IntersectIA
+    fe[Frontend Next.js + Three.js]
+    be[Backend NestJS]
+    ai[Servicio IA FastAPI]
+    db[(PostgreSQL)]
+  end
+  llm[AWS Bedrock - LLM]
+  visitante -->|navega y juega| fe
+  fe -->|socket.io / HTTP| be
+  be -->|X-Internal-Token| ai
+  ai -->|/chat usa LLM| llm
+  be --> db

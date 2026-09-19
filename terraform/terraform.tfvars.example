@@ -1,0 +1,4 @@
+aws_region    = "us-east-1"
+environment   = "demo"
+backend_image = "<account>.dkr.ecr.us-east-1.amazonaws.com/intersectia-demo-backend:latest"
+ai_image      = "<account>.dkr.ecr.us-east-1.amazonaws.com/intersectia-demo-ai:latest"

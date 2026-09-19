@@ -1,0 +1,61 @@
+# Ejemplo de pipeline para el backend (copiar a intersectia-backend/.github/workflows/).
+# Autenticacion con OIDC: sin claves de AWS de larga duracion.
+name: deploy-backend
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: intersectia-demo-backend
+  ECS_CLUSTER: intersectia-demo
+  ECS_SERVICE: intersectia-demo
+  CONTAINER_NAME: backend
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::<account-id>:role/github-actions-intersectia
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" .
+          docker push "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+      - name: Run migrations (one-off ECS task)
+        run: echo "aws ecs run-task ... --overrides command=npx prisma migrate deploy"
+
+      - name: Update ECS service
+        run: echo "aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --force-new-deployment"

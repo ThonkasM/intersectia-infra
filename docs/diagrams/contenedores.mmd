@@ -1,0 +1,24 @@
+flowchart TB
+  subgraph Navegador
+    react[React / Next.js]
+    three[Three.js demo 3D]
+    sock[socket.io-client]
+  end
+  subgraph Backend[NestJS - fuente de verdad]
+    gw[Gateway socket.io / rooms por sesion]
+    loop[Motor de simulacion 50 ms]
+    dec[Motores de decision: FIFO / derecha / IA]
+    met[Metricas + Prisma]
+  end
+  subgraph IA[FastAPI]
+    decision[/decision - sin LLM, 150 ms/]
+    chat[/chat - RAG + Bedrock/]
+  end
+  db[(PostgreSQL)]
+  react --> three --> sock
+  sock <--> gw
+  gw <--> loop --> dec
+  dec -->|HTTP 150 ms| decision
+  loop --> met --> db
+  react -->|POST /ai/chat proxy| chat
+  backend[Backend] --> chat

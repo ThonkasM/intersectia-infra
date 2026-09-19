@@ -1,0 +1,23 @@
+sequenceDiagram
+  participant U as Usuario
+  participant F as Frontend
+  participant B as Backend (sesion)
+  participant A as IA
+  participant D as PostgreSQL
+
+  U->>F: abre /demo
+  F->>B: connect (auth.sessionId)
+  B->>D: crear SimulationSession
+  B-->>F: state (vehiculos)
+  loop cada 50 ms
+    B->>B: spawn / mover / encolar
+    B->>A: POST /decision (queue, occupant) [managed-ai]
+    A-->>B: vehicleId (o fallback FIFO)
+    B-->>F: state (20 Hz)
+  end
+  U->>F: gamepad / clic
+  F->>B: playerState / freeze / reset
+  B-->>F: state actualizado
+  B->>D: registrar cruces y violaciones (asincrono)
+  U->>F: cierra /demo
+  B->>D: endedAt de la sesion
