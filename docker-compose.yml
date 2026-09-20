@@ -40,8 +40,8 @@ services:
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-dev-internal-token}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
     command: sh -c "npx prisma migrate deploy && node dist/main"
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
 
   frontend:
     build:
@@ -50,7 +50,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "8080:80"
+      - "80:80"
 
 volumes:
   intersectia_pgdata:

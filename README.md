@@ -19,15 +19,20 @@ Repositorio de infraestructura y despliegue de IntersectIA. No contiene código 
 
 Los repos deben clonarse como hermanos de `intersectia-infra` para que los `build context` de `docker-compose.yml` y Terraform funcionen.
 
-## Arranque rápido local (Docker)
+## Arranque rápido local / VM única (Docker)
 
 ```bash
 cp .env.example .env
 docker compose up -d --build
-# Frontend: http://localhost:8080
-# Backend:  http://localhost:3000
-# AI:       http://localhost:8000/health
+# Todo por el puerto 80:  http://localhost/
 ```
+
+Un solo puerto público: **nginx** sirve el frontend y hace de **proxy** de `/socket.io`,
+`/ai` y `/metrics` al backend (mismo origen, sin CORS ni mixed content). El backend y la IA
+quedan internos; Postgres también.
+
+Para el despliegue más barato (una EC2/Lightsail), ver **`docs/despliegue.md` → Opción A**.
+Nota: `intersectia-infra` no tiene remoto propio; súbelo a GitHub o cópialo por `scp` a la VM.
 
 ## Despliegue AWS (resumen)
 

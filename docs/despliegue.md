@@ -10,25 +10,58 @@ Dos caminos: **VM única (barato)** o **AWS gestionado (Fargate + RDS)**.
 
 ---
 
-## Opción A — VM única (EC2 / Lightsail)
+## Opción A — VM única (EC2 / Lightsail) — la más barata
 
-Ideal para una demo de taller: un solo host corre todo con Docker.
+Un solo host corre **todo** con Docker: Frontend (nginx) + Backend + IA + Postgres.
+**Un único puerto público (80)**; nginx sirve el frontend y hace de proxy de `/socket.io`,
+`/ai` y `/metrics` hacia el backend. Al ser **mismo origen**, no hay CORS ni *mixed content*,
+y no hace falta hornear URLs en el build del frontend.
 
-```bash
-# En la VM, con los 4 repos clonados como hermanos:
-cd intersectia-infra
-cp .env.example .env
-docker compose up -d --build
+```
+Navegador -> :80 (nginx)
+              ├── /            -> frontend estático (out/)
+              ├── /socket.io/  -> backend:3000
+              ├── /ai/         -> backend:3000
+              └── /metrics/    -> backend:3000
+                                   └── backend:3000 -> ai:8000 (localhost de la task) y db:5432
 ```
 
-- Frontend: `http://<IP>:8080`
-- Backend: `http://<IP>:3000`
-- Postgres queda dentro de la red de Docker (no expuesto).
+### Pasos
 
-Puntos de atención:
-- El `docker-compose.yml` construye las imágenes desde los repos locales, así que no necesita ECR.
-- El backend ejecuta `npx prisma migrate deploy` al arrancar (crea las tablas).
-- Para producción real, cambia `INTERNAL_SERVICE_TOKEN` y restringe `CORS_ORIGIN`.
+1. **Crear la VM**: EC2 **t3.small** (Ubuntu 22.04) o Lightsail. En el Security Group abre
+   **solo el puerto 80** (y el 22 para SSH). t3.small (2 GB) es lo mínimo cómodo; t3.micro
+   puede quedar justo al compilar.
+2. **Instalar Docker** en la VM:
+   ```bash
+   curl -fsSL https://get.docker.com | sh
+   sudo usermod -aG docker $USER && newgrp docker
+   ```
+3. **Llevar los 4 repos** a la VM, clonados **como hermanos**:
+   ```bash
+   mkdir -p ~/intersectia && cd ~/intersectia
+   git clone https://github.com/ThonkasM/intersectia-backend.git
+   git clone https://github.com/ThonkasM/intersectia-frontend.git
+   git clone https://github.com/ThonkasM/intersectia-ai.git
+   # intersectia-infra no tiene remoto: súbelo a GitHub o cópialo por scp:
+   scp -r ./intersectia-infra usuario@<IP>:~/intersectia/
+   ```
+4. **Levantar todo**:
+   ```bash
+   cd ~/intersectia/intersectia-infra
+   cp .env.example .env      # cambia INTERNAL_SERVICE_TOKEN
+   docker compose up -d --build
+   ```
+5. **Abrir** `http://<IP>/` (landing) y `http://<IP>/demo`. En la demo, cambia a **managed** o
+   **managed-ai** para conectar.
+
+### Puntos de atención
+- El `docker-compose.yml` construye las imágenes desde los repos locales (no usa ECR).
+- El backend corre `npx prisma migrate deploy` al arrancar (crea las tablas en el Postgres del compose).
+- La IA **entrena su política en el build** de la imagen (`RUN python -m app.policy.train`), así el
+  artefacto (gitignored) queda dentro del contenedor.
+- Cambia `INTERNAL_SERVICE_TOKEN` en `.env` (debe coincidir backend ↔ IA; el compose ya lo unifica).
+- `restart: unless-stopped` reinicia los contenedores si la VM se reinicia.
+- Logs: `docker compose logs -f` · Detener: `docker compose down` · Rebuild: `docker compose up -d --build`.
 
 ---
 
