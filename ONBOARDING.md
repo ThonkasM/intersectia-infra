@@ -80,6 +80,9 @@ npm start                     # o: npm run android / npm run ios
 - **Dispositivo físico** (misma Wi-Fi): usa la IP LAN de tu máquina, ej. `http://192.168.1.20:3000`.
 - Checks: `npm run typecheck` · `npm run lint`.
 - El chatbot necesita el **backend** corriendo (`POST {API_URL}/ai/chat`); no tiene lógica de simulación.
+- **Apuntar al backend en la nube** (deploy de `intersectia-infra`): `EXPO_PUBLIC_API_URL=http://<EC2_PUBLIC_IP>`
+  (nginx en el puerto 80; **sin** `:3000`), o `https://<cloudfront-domain>` si CloudFront está habilitado.
+  El mobile solo usa REST (`/ai/chat`, `/ai/chat/topics`), no WebSocket.
 
 ## 7. Infra (opcional): todo el stack con Docker en un comando
 ```bash
