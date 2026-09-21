@@ -97,21 +97,29 @@ inference-profile), **Elastic IP** y **CloudFront** (viewer HTTPS → origin HTT
 La EC2 (user-data) instala Docker + compose, clona los 3 repos (rama `v2`), genera el `.env` desde
 Secrets Manager, escribe un `docker-compose.yml` (backend + IA + frontend, usando RDS) y compila/levanta.
 
-```bash
-aws cloudformation create-stack \
-  --stack-name intersectia \
-  --template-body file://infrastructure/cloudformation-ec2.yaml \
-  --capabilities CAPABILITY_IAM \
-  --region us-east-1 \
-  --parameters \
-    ParameterKey=EnvironmentName,ParameterValue=production \
-    ParameterKey=InstanceType,ParameterValue=t3.small \
-    ParameterKey=GitBranch,ParameterValue=v2
+Un solo comando (crea o actualiza y muestra la URL):
 
-# Seguir el avance y obtener la URL:
-aws cloudformation describe-stacks --stack-name intersectia --region us-east-1 \
-  --query "Stacks[0].Outputs"
+```bash
+cd intersectia-infra
+./deploy/ec2-cfn.sh up        # crea/actualiza el stack (EC2 + RDS + CloudFront)
+./deploy/ec2-cfn.sh outputs   # ver salidas (URL de CloudFront, instance id)
+./deploy/ec2-cfn.sh status
+./deploy/ec2-cfn.sh destroy   # eliminar todo
 ```
+
+Actualizar **solo** un servicio en la instancia (por SSM, sin SSH):
+
+```bash
+ID=$(aws cloudformation describe-stacks --stack-name intersectia --region us-east-1 \
+  --query "Stacks[0].Outputs[?OutputKey=='EC2InstanceId'].OutputValue" --output text)
+
+./deploy/ec2-update.sh "$ID" frontend
+./deploy/ec2-update.sh "$ID" backend
+./deploy/ec2-update.sh "$ID" ai
+./deploy/ec2-update.sh "$ID"             # all
+```
+
+Con `make`: `make cloud-up` · `make cloud-outputs` · `make cloud-update ID=i-xxxx S=frontend` · `make cloud-destroy`.
 
 - Usar la URL de **CloudFront** (HTTPS) → evita *mixed content* sin dominio propio.
 - Tras el primer deploy, poner `AllowedCORSOrigin` = dominio de CloudFront y actualizar el stack.

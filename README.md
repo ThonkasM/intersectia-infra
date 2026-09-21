@@ -46,9 +46,17 @@ Nota: `intersectia-infra` no tiene remoto propio; súbelo a GitHub o cópialo po
 
 ## Infra con CloudFormation (EC2 + RDS + CloudFront)
 
-Alternativa a la Opción A “manual”: `infrastructure/cloudformation-ec2.yaml` aprovisiona VPC,
-EC2 (con swap), RDS PostgreSQL, Secrets Manager, IAM con **Bedrock** y **CloudFront (HTTPS sin
-dominio)**. Detalles y comandos en `docs/despliegue.md` → **Opción A+**.
+`infrastructure/cloudformation-ec2.yaml` aprovisiona VPC, EC2 (con swap), RDS PostgreSQL,
+Secrets Manager, IAM con **Bedrock** y **CloudFront (HTTPS sin dominio)**.
+
+```bash
+./deploy/ec2-cfn.sh up                       # crea/actualiza el stack (un comando)
+./deploy/ec2-cfn.sh outputs                  # URL de CloudFront + instance id
+./deploy/ec2-update.sh <instance-id> backend # actualiza solo backend (frontend|ai|all)
+```
+
+Con `make`: `make cloud-up`, `make cloud-outputs`, `make cloud-update ID=i-xxxx S=frontend`, `make cloud-destroy`.
+Detalles en `docs/despliegue.md` → **Opción A+**.
 
 ## IA en la nube
 

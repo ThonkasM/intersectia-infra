@@ -1,23 +1,44 @@
-# Operaciones de IntersectIA (stack de un solo host: Postgres + AI + backend + frontend)
-.PHONY: up down logs ps rebuild migrate setup
+# Operaciones de IntersectIA.
+# Local (docker-compose):  make up / down / logs / migrate
+# AWS (CloudFormation):    make cloud-up / cloud-outputs / cloud-destroy
+# Actualizar en la EC2:    make cloud-update ID=... S=frontend
+.PHONY: up down logs ps rebuild migrate setup cloud-up cloud-status cloud-outputs cloud-destroy cloud-update
 
-up: ## Construye y levanta todo (frontend en :80)
+# --- Local / VM con docker-compose ---
+up:
 	docker compose up -d --build
 
-down: ## Detiene y elimina los contenedores
+down:
 	docker compose down
 
-logs: ## Sigue los logs
+logs:
 	docker compose logs -f
 
-ps: ## Estado de los contenedores
+ps:
 	docker compose ps
 
-rebuild: ## Reconstruye las imagenes sin cache
+rebuild:
 	docker compose build --no-cache
 
-migrate: ## Aplica migraciones de Prisma en la base del compose
+migrate:
 	docker compose exec backend npx prisma migrate deploy
 
-setup: ## Aprovisiona en una VM/EC2 (Docker + repos + stack)
+setup:
 	bash deploy/ec2-setup.sh
+
+# --- AWS con CloudFormation (EC2 + RDS + CloudFront) ---
+cloud-up:
+	bash deploy/ec2-cfn.sh up
+
+cloud-status:
+	bash deploy/ec2-cfn.sh status
+
+cloud-outputs:
+	bash deploy/ec2-cfn.sh outputs
+
+cloud-destroy:
+	bash deploy/ec2-cfn.sh destroy
+
+# make cloud-update ID=i-xxxx S=frontend   (S = frontend|backend|ai|all)
+cloud-update:
+	bash deploy/ec2-update.sh $(ID) $(S)
