@@ -10,6 +10,16 @@ Tres caminos **alternativos** (elige UNO; no los corras a la vez):
 > duplicados (dos RDS, dos CloudFront, dos cómputos) y doble costo. Usa uno solo y, si cambias,
 > destruye el anterior primero (`./deploy/ec2-cfn.sh destroy` o `terraform destroy`).
 
+### IaC: CloudFormation vs Terraform (misma arquitectura, distinta herramienta)
+
+- **Terraform**: el más usado en la industria; **multi-cloud** (AWS/GCP/Azure), `plan`/`apply`,
+  **estado** (`.tfstate`) y módulos. Vos gestionás el estado (local o backend remoto con lock).
+  En este repo: `terraform-ec2/` (A+) y `terraform/` (B).
+- **CloudFormation**: **nativo de AWS**, el estado lo gestiona AWS (no hay archivos), integrado con
+  consola/IAM. En este repo: `infrastructure/cloudformation-ec2.yaml` (A+).
+
+La **arquitectura es idéntica**; cambia la herramienta. Si te interesa lo de industria → Terraform.
+
 ## Prerrequisitos
 
 - Docker y Docker Compose.
@@ -91,11 +101,11 @@ Operación diaria (desde `intersectia-infra/`): `make up` · `make logs` · `mak
 
 ---
 
-## Opción A+ — CloudFormation (EC2 + RDS + CloudFront) — recomendada con AWS
+## Opción A+ — EC2 + RDS + CloudFront (CloudFormation o Terraform)
 
-Igual que la Opción A (una EC2, un puerto 80), pero **aprovisionada con CloudFormation** y con
-**RDS gestionado + CloudFront (HTTPS sin dominio) + IAM con Bedrock**. Es el patrón que usa el
-proyecto Homy y deja el despliegue reproducible.
+Igual que la Opción A (una EC2, un puerto 80), pero con **RDS gestionado + CloudFront (HTTPS sin
+dominio) + IAM con Bedrock**. Misma arquitectura, dos herramientas de IaC: **CloudFormation** o
+**Terraform** (elegí una; no las corras a la vez).
 
 Plantilla: `infrastructure/cloudformation-ec2.yaml`. Crea: VPC + subredes, **EC2** (Amazon Linux
 2023, con swap), **RDS PostgreSQL** privado, **Secrets Manager** (contraseña de DB y token interno),
@@ -128,6 +138,20 @@ ID=$(aws cloudformation describe-stacks --stack-name intersectia --region us-eas
 ```
 
 Con `make`: `make cloud-up` · `make cloud-outputs` · `make cloud-update ID=i-xxxx S=frontend` · `make cloud-destroy`.
+
+### Variante con Terraform (misma arquitectura)
+
+El mismo stack (EC2 + RDS + CloudFront + Secrets + IAM/Bedrock) en HCL, en `terraform-ec2/`:
+
+```bash
+./deploy/terraform-ec2.sh up        # crea/actualiza y muestra la URL de CloudFront
+./deploy/terraform-ec2.sh plan
+./deploy/terraform-ec2.sh outputs
+./deploy/terraform-ec2.sh destroy
+```
+(`make tf-ec2-up` · `make tf-ec2-destroy`). Para actualizar código: `./deploy/ec2-update.sh <instance-id> backend`.
+
+> **Estado del state**: Terraform guarda el estado en `terraform-ec2/terraform.tfstate` (local). Cuidalo; para trabajo en equipo usá un backend remoto (S3 + DynamoDB) — ver comentario en `terraform-ec2/versions.tf`.
 
 - Usar la URL de **CloudFront** (HTTPS) → evita *mixed content* sin dominio propio.
 - Tras el primer deploy, poner `AllowedCORSOrigin` = dominio de CloudFront y actualizar el stack.

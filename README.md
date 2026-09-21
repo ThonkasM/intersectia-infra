@@ -28,7 +28,8 @@ misma cuenta/región (crearían recursos duplicados: dos RDS, dos CloudFront, et
 |---|---|---|---|---|
 | **A** | `docker-compose` en 1 VM (Postgres en contenedor) | demo más barata, HTTP | ~$15–20/mes | `docker-compose.yml` + `deploy/ec2-setup.sh` |
 | **A+** | **CloudFormation**: EC2 + RDS + CloudFront + IAM/Bedrock | demo con **HTTPS** y DB gestionada, reproducible | ~$30/mes | `infrastructure/cloudformation-ec2.yaml` + `deploy/ec2-cfn.sh` |
-| **B** | **Terraform**: S3+CloudFront (front) + **ECS Fargate** (backend+IA) + RDS + ALB | producción/escala | ~$50–60/mes | `terraform/` |
+| **A+ᵗ** | **Terraform**: misma arquitectura que A+ (EC2 + RDS + CloudFront), en HCL | igual que A+, si preferís Terraform | ~$30/mes | `terraform-ec2/` + `deploy/terraform-ec2.sh` |
+| **B** | **Terraform**: S3+CloudFront (front) + **ECS Fargate** (backend+IA) + RDS + ALB | producción/escala | ~$50–60/mes | `terraform/` + `deploy/terraform.sh` |
 
 **Recomendado para el taller:** **A+** con `./deploy/ec2-cfn.sh up`.
 Para escala/producción: **B** con `./deploy/terraform.sh up` (infra + imágenes + servicio + frontend + migraciones).

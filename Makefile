@@ -2,7 +2,7 @@
 # Local (docker-compose):  make up / down / logs / migrate
 # AWS (CloudFormation):    make cloud-up / cloud-outputs / cloud-destroy
 # Actualizar en la EC2:    make cloud-update ID=... S=frontend
-.PHONY: up down logs ps rebuild migrate setup cloud-up cloud-status cloud-outputs cloud-destroy cloud-update tf-up tf-destroy nuke
+.PHONY: up down logs ps rebuild migrate setup cloud-up cloud-status cloud-outputs cloud-destroy cloud-update tf-ec2-up tf-ec2-destroy tf-up tf-destroy nuke
 
 # --- Local / VM con docker-compose ---
 up:
@@ -43,7 +43,13 @@ cloud-destroy:
 cloud-update:
 	bash deploy/ec2-update.sh $(ID) $(S)
 
-# --- Opción B (Terraform) y limpieza ---
+# --- Terraform: A+ (EC2) y B (ECS) ---
+tf-ec2-up:
+	bash deploy/terraform-ec2.sh up
+
+tf-ec2-destroy:
+	bash deploy/terraform-ec2.sh destroy
+
 tf-up:
 	bash deploy/terraform.sh up
 
