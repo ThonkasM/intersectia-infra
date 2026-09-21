@@ -1,0 +1,28 @@
+{
+  "folders": [
+    {
+      "path": "../intersectia-frontend",
+      "name": "Frontend"
+    },
+    {
+      "path": "../intersectia-backend",
+      "name": "Backend"
+    },
+    {
+      "path": "../intersectia-ai",
+      "name": "AI"
+    },
+    {
+      "path": "../intersectia-mobile",
+      "name": "Mobile"
+    },
+    {
+      "path": ".",
+      "name": "Infra"
+    }
+  ],
+  "settings": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
+}

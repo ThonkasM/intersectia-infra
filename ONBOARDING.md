@@ -16,6 +16,12 @@ done
 ```
 > `main` y `v2` apuntan al mismo commit en los 5 repos, así que un clon normal ya trae la última versión.
 
+### Abrir todo en VS Code (workspace)
+Trae las 5 carpetas en una sola ventana (igual que el workspace del equipo):
+```bash
+code intersectia-infra/intersectia.code-workspace
+```
+
 ## 2. Base de datos (PostgreSQL)
 Lo más simple (Docker, viene en el backend):
 ```bash
