@@ -182,7 +182,8 @@ Resources:
 
   Database:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
+    # Delete (no Snapshot): al borrar el stack no queda snapshot final.
+    DeletionPolicy: Delete
     Properties:
       DBInstanceIdentifier: !Sub '${EnvironmentName}-intersectia-db'
       Engine: postgres

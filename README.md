@@ -34,6 +34,9 @@ misma cuenta/región (crearían recursos duplicados: dos RDS, dos CloudFront, et
 Para escala/producción: **B** con `./deploy/terraform.sh up` (infra + imágenes + servicio + frontend + migraciones).
 Ambas ya funcionan en un comando; elige **una**.
 
+**Eliminar todo** (después del parcial): `./deploy/ec2-cfn.sh destroy && ./deploy/nuke.sh` (A+) o
+`./deploy/terraform.sh destroy && ./deploy/nuke.sh` (B). Ver `docs/despliegue.md` → *Eliminar el stack*.
+
 ## Arranque rápido local / VM única (Docker)
 
 ```bash

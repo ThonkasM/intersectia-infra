@@ -33,6 +33,8 @@ resource "random_password" "internal_token" {
 resource "aws_ecr_repository" "backend" {
   name                 = "${local.name}-backend"
   image_tag_mutability = "IMMUTABLE"
+  # Permite que `terraform destroy` borre el repo aunque tenga imagenes.
+  force_delete = true
   image_scanning_configuration {
     scan_on_push = true
   }
@@ -41,6 +43,7 @@ resource "aws_ecr_repository" "backend" {
 resource "aws_ecr_repository" "ai" {
   name                 = "${local.name}-ai"
   image_tag_mutability = "IMMUTABLE"
+  force_delete         = true
   image_scanning_configuration {
     scan_on_push = true
   }
@@ -50,6 +53,8 @@ resource "aws_ecr_repository" "ai" {
 
 resource "aws_secretsmanager_secret" "app" {
   name = "${local.name}-app"
+  # Borrado inmediato al destruir (sin ventana de recuperacion de 7 dias).
+  recovery_window_in_days = 0
 }
 
 resource "aws_secretsmanager_secret_version" "app" {

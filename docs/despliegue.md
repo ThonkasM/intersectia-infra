@@ -207,3 +207,46 @@ El servicio ECS conserva revisiones previas de la task definition. Ante un fallo
 ```bash
 aws ecs update-service --cluster intersectia --service backend --task-definition intersectia-backend:<revision-anterior>
 ```
+
+---
+
+## Eliminar el stack (teardown)
+
+Elige según la opción desplegada. Después de borrar, corre `nuke.sh` para limpiar restos.
+
+### Opción A+ (CloudFormation)
+```bash
+./deploy/ec2-cfn.sh destroy     # borra EC2, RDS, CloudFront, EIP, SG, IAM
+./deploy/nuke.sh                # limpia Secrets, log group /ec2/intersectia, snapshots, EIPs
+```
+(`make cloud-destroy` · `make nuke`)
+
+### Opción B (Terraform)
+```bash
+./deploy/terraform.sh destroy   # ECR con force_delete, S3 force_destroy, RDS sin snapshot
+./deploy/nuke.sh
+```
+(`make tf-destroy` · `make nuke`)
+
+> Si pierdes el `.tfstate`, `terraform destroy` no sabrá qué borrar: usa `nuke.sh` y elimina a mano lo que quede.
+
+### Opción A (docker-compose en una EC2 manual)
+```bash
+# en la VM:
+docker compose down -v          # -v borra el volumen de Postgres
+# en AWS: terminar la EC2, liberar la Elastic IP y borrar el Security Group
+```
+
+### Verificar que no quede nada
+```bash
+aws resourcegroupstaggingapi get-resources --region us-east-1 \
+  --resource-type-filters ec2:instance,rds:db,cloudfront:distribution,elasticloadbalancing:loadbalancer,ecr:repository \
+  --query "ResourceTagMappingList[].ResourceARN" --output table
+```
+`./deploy/nuke.sh --dry-run` lista los restos sin borrar (Secrets Manager, log groups, snapshots, EIPs).
+
+### Por qué podría quedar algo
+- **Secrets Manager**: ventana de recuperación de 7 días (A+); `nuke.sh` los fuerza.
+- **Log group `/ec2/intersectia`**: lo crea `awslogs` en runtime, no lo gestiona CloudFormation.
+- **Snapshots de RDS**: A+ usa `Delete` y B `skip_final_snapshot` (no deberían quedar).
+- **`.tfstate` local de Terraform**: sin él, `destroy` no sabe qué borrar.
