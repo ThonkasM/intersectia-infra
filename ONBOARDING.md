@@ -4,16 +4,17 @@ Guía para clonar los proyectos, obtener la **última versión** y correrlos en 
 
 ## 0. Antes de empezar
 - **Repos** (5, independientes): `intersectia-backend`, `intersectia-frontend`, `intersectia-ai`, `intersectia-mobile`, `intersectia-infra`.
-- **La última versión está en la rama `v2`** de cada repo. La rama `main` está desactualizada → clona con `-b v2`.
+- **La última versión está en `main`** (y en `v2`, que apunta al mismo commit). Un `git clone` normal ya trae todo.
 - **Requisitos**: Git, Node 22+ (probado en 24), Python 3.10+ (probado en 3.14), Docker (recomendado para la DB).
 
-## 1. Clonar todo (rama v2)
+## 1. Clonar todo
 ```bash
 mkdir intersectia && cd intersectia
 for r in intersectia-backend intersectia-frontend intersectia-ai intersectia-mobile intersectia-infra; do
-  git clone -b v2 https://github.com/ThonkasM/$r.git
+  git clone https://github.com/ThonkasM/$r.git
 done
 ```
+> `main` y `v2` apuntan al mismo commit en los 5 repos, así que un clon normal ya trae la última versión.
 
 ## 2. Base de datos (PostgreSQL)
 Lo más simple (Docker, viene en el backend):
@@ -103,5 +104,4 @@ Recuerda: `INTERNAL_SERVICE_TOKEN` (backend) y `AI_INTERNAL_SERVICE_TOKEN` (IA) 
 - **El mobile no conecta al backend**: revisa `EXPO_PUBLIC_API_URL` (10.0.2.2 en emulador Android, IP LAN en dispositivo).
 
 ## 11. Nota sobre ramas
-Todo el trabajo está en **`v2`**. Un `git clone` sin `-b v2` trae `main` (desactualizado).
-Si se quiere que la rama por defecto ya tenga lo último, se puede hacer merge `v2 → main` en cada repo.
+`main` y `v2` están **sincronizadas** (mismo commit) en los 5 repos; un `git clone` normal trae la última versión.
