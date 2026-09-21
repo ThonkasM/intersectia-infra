@@ -63,3 +63,26 @@ curl -s -X POST http://<IP>/ai/chat -H 'Content-Type: application/json' \
 
 Sin esos pasos, la demo funciona igual: el chat responde con la base de conocimiento (offline) y la
 decisión de cruce usa la política entrenada con normalidad.
+
+## Requisito de cuenta AWS (importante)
+
+CloudFront **y** Bedrock dependen de que la **cuenta AWS esté verificada**:
+
+- **CloudFront**: al crear una distribución, una cuenta no verificada devuelve
+  `403 Your account must be verified before you can add new CloudFront resources`.
+- **Bedrock**: con la cuenta sin verificar, `get-foundation-model-availability` muestra
+  `authorizationStatus: NOT_AUTHORIZED` (para **todos** los modelos, no solo Meta) e `InvokeModel`
+  devuelve `ValidationException: Operation not allowed`.
+
+En ambos casos la app sigue funcionando (HTTP directo + chat offline). Una vez verificada la cuenta:
+
+- CloudFront: `ENABLE_CLOUDFRONT=true ./deploy/ec2-cfn.sh up`.
+- Bedrock: se **auto-habilita en la primera invocación** (el instance role ya tiene
+  `bedrock:InvokeModel` y el **IMDS hop limit = 2** viene en el template, que es lo que permite al
+  contenedor tomar las credenciales del rol). No requiere redeploy.
+
+Comprobar el estado de Bedrock:
+```bash
+aws bedrock get-foundation-model-availability \
+  --model-id meta.llama3-1-8b-instruct-v1:0 --region us-east-1
+```

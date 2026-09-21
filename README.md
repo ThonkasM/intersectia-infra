@@ -95,4 +95,10 @@ Arquitectura mínima pensada para una demo de taller universitario:
 - Imágenes → **ECR** (tags inmutables por commit).
 - CI/CD → **GitHub Actions con OIDC** (sin credenciales de larga duración).
 
-Ver `docs/arquitectura-aws.md` y `docs/despliegue.md`.
+## Documentación
+
+- `docs/arquitectura-aws.md` — arquitectura AWS y decisiones de cómputo.
+- `docs/despliegue.md` — Opciones A / A+ (CloudFormation o Terraform) / B + teardown.
+- `docs/ia-en-cloud.md` — IA en la nube (`/decision` CPU y `/chat` con Bedrock) y requisito de cuenta.
+- `docs/demo.md` — guion de demo y comandos de operación.
+- `ONBOARDING.md` — cómo clonar y correr cada proyecto en local (para el equipo).

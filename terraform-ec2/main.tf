@@ -175,11 +175,18 @@ resource "aws_security_group" "ec2" {
 }
 
 resource "aws_instance" "this" {
-  ami                         = data.aws_ssm_parameter.al2023.value
-  instance_type               = var.instance_type
-  iam_instance_profile        = aws_iam_instance_profile.ec2.name
-  subnet_id                   = data.aws_subnets.default.ids[0]
-  vpc_security_group_ids      = [aws_security_group.ec2.id]
+  ami                    = data.aws_ssm_parameter.al2023.value
+  instance_type          = var.instance_type
+  iam_instance_profile   = aws_iam_instance_profile.ec2.name
+  subnet_id              = data.aws_subnets.default.ids[0]
+  vpc_security_group_ids = [aws_security_group.ec2.id]
+  # Hop limit 2: el contenedor de la IA debe alcanzar IMDS para las credenciales
+  # del instance role (necesario para invocar Bedrock).
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "optional"
+    http_put_response_hop_limit = 2
+  }
   user_data_replace_on_change = true
   user_data = templatefile("${path.module}/user-data.sh.tpl", {
     region            = var.aws_region

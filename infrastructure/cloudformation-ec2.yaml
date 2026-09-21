@@ -269,6 +269,12 @@ Resources:
       InstanceType: !Ref InstanceType
       ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
       IamInstanceProfile: !Ref EC2InstanceProfile
+      # Hop limit 2: permite que el contenedor de la IA alcance IMDS y tome las
+      # credenciales del instance role (necesario para invocar Bedrock).
+      MetadataOptions:
+        HttpEndpoint: enabled
+        HttpTokens: optional
+        HttpPutResponseHopLimit: 2
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds:
         - !Ref EC2SecurityGroup
