@@ -1,6 +1,14 @@
 # Guía de despliegue
 
-Dos caminos: **VM única (barato)** o **AWS gestionado (Fargate + RDS)**.
+Tres caminos **alternativos** (elige UNO; no los corras a la vez):
+
+- **A** — VM única con `docker-compose` (Postgres en contenedor). El más barato.
+- **A+** — **CloudFormation**: EC2 + RDS + CloudFront + IAM/Bedrock. HTTPS sin dominio, reproducible.
+- **B** — **Terraform**: S3+CloudFront (front) + ECS Fargate (backend+IA) + RDS + ALB. Para producción/escala.
+
+> ⚠️ **A+ y B son excluyentes.** Si corres ambos en la misma cuenta/región tendrás recursos
+> duplicados (dos RDS, dos CloudFront, dos cómputos) y doble costo. Usa uno solo y, si cambias,
+> destruye el anterior primero (`./deploy/ec2-cfn.sh destroy` o `terraform destroy`).
 
 ## Prerrequisitos
 
@@ -190,6 +198,25 @@ Cada repo incluye un workflow que, al hacer push a `main`:
 La autenticación usa **OIDC** (`permissions: id-token: write`), sin claves de AWS de larga duración. El rol IAM de Terraform confía solo en el repositorio y la rama indicados.
 
 ---
+
+### Estado y limitaciones de la Opción B (Terraform)
+
+El Terraform es un **esqueleto funcional** (no listo para producción sin completar esto):
+
+- **HTTPS / mixed content**: el frontend (CloudFront HTTPS) apunta al ALB **HTTP**; el navegador
+  bloquea `http://…` desde una página HTTPS. Falta **HTTPS en el ALB (ACM + dominio)** o **enrutar
+  la API/WebSocket por CloudFront** al ALB.
+- **Apply en dos fases**: el servicio ECS necesita que las imágenes ya existan en ECR → aplicar con
+  `deploy_services=false`, subir imágenes y volver a aplicar.
+- **Migraciones**: correr `prisma migrate deploy` como **task ECS one-off** (no en el contenedor que sirve).
+- **Env del frontend**: `NEXT_PUBLIC_*` se hornean **antes** de `npm run build` y deben apuntar al
+  dominio de CloudFront/ALB.
+- **Sticky sessions**: con `desired_count > 1`, activar **stickiness** (cada task guarda sesiones en memoria).
+- **VPC/red**: usa la **VPC por defecto**; para producción, VPC propia y subredes privadas + NAT.
+- **Logs**: el Terraform no configura CloudWatch.
+
+> En resumen: **A+ (CloudFormation) es la ruta lista y recomendada**; **B (Terraform)** es el camino
+> “producción” a completar. No mezclar ambas.
 
 ## Verificación post-despliegue
 

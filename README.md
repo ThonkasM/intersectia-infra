@@ -19,6 +19,21 @@ Repositorio de infraestructura y despliegue de IntersectIA. No contiene código 
 
 Los repos deben clonarse como hermanos de `intersectia-infra` para que los `build context` de `docker-compose.yml` y Terraform funcionen.
 
+## ¿Qué opción de despliegue uso?
+
+Son **tres alternativas mutuamente excluyentes**: elige UNA. **No las corras a la vez** sobre la
+misma cuenta/región (crearían recursos duplicados: dos RDS, dos CloudFront, etc. → doble costo).
+
+| Opción | Qué es | Cuándo | Costo aprox. | Entrada |
+|---|---|---|---|---|
+| **A** | `docker-compose` en 1 VM (Postgres en contenedor) | demo más barata, HTTP | ~$15–20/mes | `docker-compose.yml` + `deploy/ec2-setup.sh` |
+| **A+** | **CloudFormation**: EC2 + RDS + CloudFront + IAM/Bedrock | demo con **HTTPS** y DB gestionada, reproducible | ~$30/mes | `infrastructure/cloudformation-ec2.yaml` + `deploy/ec2-cfn.sh` |
+| **B** | **Terraform**: S3+CloudFront (front) + **ECS Fargate** (backend+IA) + RDS + ALB | producción/escala | ~$50–60/mes | `terraform/` |
+
+**Recomendado para este proyecto (taller):** **A+** con `./deploy/ec2-cfn.sh up`.
+La **B (Terraform)** queda como camino “producción”, pero es un **esqueleto** (ver limitaciones en
+`docs/despliegue.md`), no lo uses sin completar los pendientes.
+
 ## Arranque rápido local / VM única (Docker)
 
 ```bash
