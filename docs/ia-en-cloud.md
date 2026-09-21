@@ -29,7 +29,7 @@ El servicio de IA tiene **dos caminos muy distintos**. En cloud se comportan as�
 | Región | `AI_AWS_REGION` con el perfil de inferencia (`us-east-1`/`us-west-2`) | Igual |
 | Salida a Internet | Subred pública + IGW (o NAT) | NAT Gateway (o VPC endpoints) |
 
-- Si falta cualquiera de estos, el chat **degrada offline** con el `contextoResumen` del tema (no falla;
+- Si falta cualquiera de estos, el chat **degrada offline** con el `contextoGuia` del tema (no falla;
   ya lo verificamos localmente: sin credenciales responde sin LLM).
 - Config: `AI_AWS_REGION`, `AI_BEDROCK_MODEL_ID` (por defecto `us.meta.llama3-1-8b-instruct-v1:0`).
 
