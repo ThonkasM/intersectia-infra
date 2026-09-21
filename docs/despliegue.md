@@ -26,7 +26,25 @@ Navegador -> :80 (nginx)
                                    └── backend:3000 -> ai:8000 (localhost de la task) y db:5432
 ```
 
-### Pasos
+### Deploy en un comando (recomendado)
+
+El script `deploy/ec2-setup.sh` hace todo: instala Docker, clona/actualiza los repos, genera el
+`.env` con un token aleatorio y levanta el stack.
+
+```bash
+# Opción 1: copia el repo de infra a la VM
+scp -r intersectia-infra usuario@<IP>:~/
+ssh usuario@<IP> '~/intersectia-infra/deploy/ec2-setup.sh'
+
+# Opción 2: si intersectia-infra tiene remoto
+INFRA_REPO_URL=https://github.com/tu-usuario/intersectia-infra.git ./deploy/ec2-setup.sh
+```
+
+Variables opcionales: `BRANCH=v2`, `BACKEND_REPO_URL`, `FRONTEND_REPO_URL`, `AI_REPO_URL`.
+
+Operación diaria (desde `intersectia-infra/`): `make up` · `make logs` · `make migrate` · `make down`.
+
+### Pasos manuales
 
 1. **Crear la VM**: EC2 **t3.small** (Ubuntu 22.04) o Lightsail. En el Security Group abre
    **solo el puerto 80** (y el 22 para SSH). t3.small (2 GB) es lo mínimo cómodo; t3.micro

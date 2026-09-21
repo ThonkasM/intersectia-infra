@@ -31,8 +31,18 @@ Un solo puerto público: **nginx** sirve el frontend y hace de **proxy** de `/so
 `/ai` y `/metrics` al backend (mismo origen, sin CORS ni mixed content). El backend y la IA
 quedan internos; Postgres también.
 
-Para el despliegue más barato (una EC2/Lightsail), ver **`docs/despliegue.md` → Opción A**.
-Nota: `intersectia-infra` no tiene remoto propio; súbelo a GitHub o cópialo por `scp` a la VM.
+Para el despliegue más barato (una EC2/Lightsail) hay un script todo-en-uno:
+
+```bash
+# En la VM, con este repo presente:
+./deploy/ec2-setup.sh          # instala Docker, clona los repos, crea .env y levanta el stack
+```
+
+Uso diario: `make up` · `make logs` · `make migrate` · `make down`.
+Ver **`docs/despliegue.md` → Opción A**.
+
+Nota: `intersectia-infra` no tiene remoto propio; súbelo a GitHub o cópialo por `scp` a la VM
+(el script acepta `INFRA_REPO_URL` si lo publicas).
 
 ## Despliegue AWS (resumen)
 
