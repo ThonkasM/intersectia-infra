@@ -155,6 +155,12 @@ El mismo stack (EC2 + RDS + CloudFront + Secrets + IAM/Bedrock) en HCL, en `terr
 
 - Usar la URL de **CloudFront** (HTTPS) → evita *mixed content* sin dominio propio.
 - Tras el primer deploy, poner `AllowedCORSOrigin` = dominio de CloudFront y actualizar el stack.
+- **CloudFront requiere que la cuenta AWS esté verificada.** Si al desplegar ves
+  `Your account must be verified before you can add new CloudFront resources`, dejá
+  `EnableCloudFront=false` (por defecto) y se accede por **HTTP directo** a la EC2
+  (`http://<EC2PublicIP>/`, salida `AppURL`). La app funciona igual (mismo origen vía nginx);
+  el HTTPS/CloudFront queda para cuando la cuenta esté verificada.
+- `ENABLE_CLOUDFRONT=true ./deploy/ec2-cfn.sh up` crea CloudFront cuando la cuenta ya lo permite.
 - Acceso a la VM **sin SSH**: `aws ssm start-session --target <InstanceId>`.
 - **Bedrock**: habilitar el modelo en la consola (Model access); si no, el chat degrada offline.
 - **Requisito de compilación**: las imágenes se compilan **en la instancia** (por eso `t3.small` + swap).

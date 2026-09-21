@@ -19,6 +19,361 @@ Parameters:
   BedrockModelId:
     Type: String
     Default: us.meta.llama3-1-8b-instruct-v1:0
+  EnableCloudFront:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Crear CloudFront (HTTPS). Requiere que la cuenta AWS este verificada para CloudFront.
+
+Conditions:
+  CreateCloudFront: !Equals [!Ref EnableCloudFront, 'true']
+
+Resources:
+  # ===================== Red =====================
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-intersectia-vpc'
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-public-1'
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-public-2'
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.11.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-private-1'
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.12.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-private-2'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-igw'
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-public-routes'
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  # ===================== Security Groups =====================
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: IntersectIA EC2 (HTTP)
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-ec2-sg'
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: IntersectIA RDS (5432 desde EC2)
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-rds-sg'
+
+  # ===================== Secrets =====================
+  DbSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${EnvironmentName}/intersectia/database'
+      Description: Credenciales de RDS PostgreSQL para IntersectIA
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "intersectia"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\AWSTemplateFormatVersion: '2010-09-09'
+Description: 'IntersectIA - Stack de bajo costo (EC2 + RDS + CloudFront + Bedrock). Inspirado en el stack de Homy.'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: production
+  InstanceType:
+    Type: String
+    Default: t3.small
+    Description: t3.small (2 GB, recomendado para compilar) o t2.micro (free tier, con swap).
+  GitBranch:
+    Type: String
+    Default: v2
+  AllowedCORSOrigin:
+    Type: String
+    Default: '*'
+    Description: Origen permitido para CORS. Ajustar al dominio de CloudFront tras el primer deploy.
+  BedrockModelId:
+    Type: String
+    Default: us.meta.llama3-1-8b-instruct-v1:0
+  EnableCloudFront:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Crear CloudFront (HTTPS). Requiere que la cuenta AWS este verificada para CloudFront.
+
+Conditions:
+  CreateCloudFront: !Equals [!Ref EnableCloudFront, 'true']
+
+Resources:
+  # ===================== Red =====================
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-intersectia-vpc'
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-public-1'
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-public-2'
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.11.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-private-1'
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.12.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-private-2'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-igw'
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-public-routes'
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  # ===================== Security Groups =====================
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: IntersectIA EC2 (HTTP)
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-ec2-sg'
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: IntersectIA RDS (5432 desde EC2)
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-rds-sg'
+
+  # ===================== Secrets =====================
+  DbSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${EnvironmentName}/intersectia/database'
+      Description: Credenciales de RDS PostgreSQL para IntersectIA
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "intersectia"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+'
+
+  TokenSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${EnvironmentName}/intersectia/internal-token'
+      Description: Token interno backend <-> IA
+      GenerateSecretString:
+        SecretStringTemplate: '{}'
+        GenerateStringKey: token
+        PasswordLength: 48
+        ExcludeCharacters: '"@/\AWSTemplateFormatVersion: '2010-09-09'
+Description: 'IntersectIA - Stack de bajo costo (EC2 + RDS + CloudFront + Bedrock). Inspirado en el stack de Homy.'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: production
+  InstanceType:
+    Type: String
+    Default: t3.small
+    Description: t3.small (2 GB, recomendado para compilar) o t2.micro (free tier, con swap).
+  GitBranch:
+    Type: String
+    Default: v2
+  AllowedCORSOrigin:
+    Type: String
+    Default: '*'
+    Description: Origen permitido para CORS. Ajustar al dominio de CloudFront tras el primer deploy.
+  BedrockModelId:
+    Type: String
+    Default: us.meta.llama3-1-8b-instruct-v1:0
+  EnableCloudFront:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Crear CloudFront (HTTPS). Requiere que la cuenta AWS este verificada para CloudFront.
+
+Conditions:
+  CreateCloudFront: !Equals [!Ref EnableCloudFront, 'true']
 
 Resources:
   # ===================== Red =====================
@@ -169,7 +524,7 @@ Resources:
         SecretStringTemplate: '{}'
         GenerateStringKey: token
         PasswordLength: 48
-        ExcludeCharacters: '"@/\'
+'
 
   # ===================== RDS =====================
   DBSubnetGroup:
@@ -331,7 +686,6 @@ Resources:
                 options:
                   awslogs-region: ${AWS::Region}
                   awslogs-group: /ec2/intersectia
-                  awslogs-stream-prefix: ai
                   awslogs-create-group: "true"
             backend:
               build: ./intersectia-backend
@@ -347,7 +701,6 @@ Resources:
                 options:
                   awslogs-region: ${AWS::Region}
                   awslogs-group: /ec2/intersectia
-                  awslogs-stream-prefix: backend
                   awslogs-create-group: "true"
             frontend:
               build: ./intersectia-frontend
@@ -359,7 +712,6 @@ Resources:
                 options:
                   awslogs-region: ${AWS::Region}
                   awslogs-group: /ec2/intersectia
-                  awslogs-stream-prefix: frontend
                   awslogs-create-group: "true"
           EOF
 
@@ -376,6 +728,7 @@ Resources:
   # ===================== CloudFront (HTTPS sin dominio) =====================
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
+    Condition: CreateCloudFront
     DependsOn: EIPAssociation
     Properties:
       DistributionConfig:
@@ -389,7 +742,6 @@ Resources:
             CustomOriginConfig:
               HTTPPort: 80
               OriginProtocolPolicy: http-only
-              OriginResponseTimeout: 300
         DefaultCacheBehavior:
           TargetOriginId: EC2Origin
           ViewerProtocolPolicy: redirect-to-https
@@ -425,9 +777,9 @@ Resources:
           CloudFrontDefaultCertificate: true
 
 Outputs:
-  CloudFrontURL:
-    Description: URL HTTPS publica (usar esta)
-    Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
+  AppURL:
+    Description: URL publica de la app (CloudFront si esta habilitado; si no, HTTP directo a la EC2)
+    Value: !If [CreateCloudFront, !Sub 'https://${CloudFrontDistribution.DomainName}', !Sub 'http://${ElasticIP}']
   EC2PublicIP:
     Value: !Ref ElasticIP
   EC2InstanceId:
@@ -436,6 +788,11 @@ Outputs:
     Value: !Sub 'aws ssm start-session --target ${EC2Instance} --region ${AWS::Region}'
   DatabaseEndpoint:
     Value: !GetAtt Database.Endpoint.Address
+  CloudFrontURL:
+    Condition: CreateCloudFront
+    Description: URL HTTPS publica (CloudFront habilitado)
+    Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
   UpdateCORSReminder:
+    Condition: CreateCloudFront
     Description: Tras el primer deploy, poner AllowedCORSOrigin en el dominio de CloudFront y actualizar el stack.
     Value: !Sub 'https://${CloudFrontDistribution.DomainName}'

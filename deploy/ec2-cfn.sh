@@ -17,6 +17,7 @@ ENV_NAME="${ENV_NAME:-production}"
 INSTANCE_TYPE="${INSTANCE_TYPE:-t3.small}"
 BRANCH="${BRANCH:-v2}"
 CORS_ORIGIN="${CORS_ORIGIN:-*}"
+ENABLE_CLOUDFRONT="${ENABLE_CLOUDFRONT:-false}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -35,7 +36,8 @@ case "${1:-up}" in
         EnvironmentName="$ENV_NAME" \
         InstanceType="$INSTANCE_TYPE" \
         GitBranch="$BRANCH" \
-        AllowedCORSOrigin="$CORS_ORIGIN"
+        AllowedCORSOrigin="$CORS_ORIGIN" \
+        EnableCloudFront="$ENABLE_CLOUDFRONT"
     echo "Stack listo. Salidas:"
     "$0" outputs
     ;;

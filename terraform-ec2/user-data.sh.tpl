@@ -53,7 +53,6 @@ services:
       options:
         awslogs-region: ${region}
         awslogs-group: /ec2/intersectia
-        awslogs-stream-prefix: ai
         awslogs-create-group: "true"
   backend:
     build: ./intersectia-backend
@@ -69,7 +68,6 @@ services:
       options:
         awslogs-region: ${region}
         awslogs-group: /ec2/intersectia
-        awslogs-stream-prefix: backend
         awslogs-create-group: "true"
   frontend:
     build: ./intersectia-frontend
@@ -81,7 +79,6 @@ services:
       options:
         awslogs-region: ${region}
         awslogs-group: /ec2/intersectia
-        awslogs-stream-prefix: frontend
         awslogs-create-group: "true"
 EOF
 
