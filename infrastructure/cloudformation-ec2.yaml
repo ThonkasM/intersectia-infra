@@ -1,0 +1,419 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'IntersectIA - Stack de bajo costo (EC2 + RDS + CloudFront + Bedrock). Inspirado en el stack de Homy.'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: production
+  InstanceType:
+    Type: String
+    Default: t3.small
+    Description: t3.small (2 GB, recomendado para compilar) o t2.micro (free tier, con swap).
+  GitBranch:
+    Type: String
+    Default: v2
+  AllowedCORSOrigin:
+    Type: String
+    Default: '*'
+    Description: Origen permitido para CORS. Ajustar al dominio de CloudFront tras el primer deploy.
+  BedrockModelId:
+    Type: String
+    Default: us.meta.llama3-1-8b-instruct-v1:0
+
+Resources:
+  # ===================== Red =====================
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-intersectia-vpc'
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-public-1'
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-public-2'
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.11.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-private-1'
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.12.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-private-2'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-igw'
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-public-routes'
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  # ===================== Security Groups =====================
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: IntersectIA EC2 (HTTP)
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-ec2-sg'
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: IntersectIA RDS (5432 desde EC2)
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-rds-sg'
+
+  # ===================== Secrets =====================
+  DbSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${EnvironmentName}/intersectia/database'
+      Description: Credenciales de RDS PostgreSQL para IntersectIA
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "intersectia"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+
+  TokenSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${EnvironmentName}/intersectia/internal-token'
+      Description: Token interno backend <-> IA
+      GenerateSecretString:
+        SecretStringTemplate: '{}'
+        GenerateStringKey: token
+        PasswordLength: 48
+        ExcludeCharacters: '"@/\'
+
+  # ===================== RDS =====================
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnets privadas para RDS
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub '${EnvironmentName}-intersectia-db'
+      Engine: postgres
+      EngineVersion: '16'
+      DBInstanceClass: db.t4g.micro
+      AllocatedStorage: 20
+      StorageType: gp3
+      DBName: intersectia
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DbSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DbSecret}:SecretString:password}}'
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      BackupRetentionPeriod: 1
+      MultiAZ: false
+      PubliclyAccessible: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-intersectia-database'
+
+  # ===================== IAM (Secrets + Logs + SSM + Bedrock) =====================
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: SecretsAccess
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DbSecret
+                  - !Ref TokenSecret
+        - PolicyName: BedrockInvoke
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource:
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
+                  - !Sub 'arn:aws:bedrock:*::foundation-model/meta.llama3-1-8b-instruct-v1:0'
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2InstanceRole
+
+  # ===================== EC2 =====================
+  ElasticIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-intersectia-eip'
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    DependsOn: Database
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 30
+            VolumeType: gp3
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-intersectia'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+          exec > >(tee /var/log/user-data.log) 2>&1
+          echo "=== IntersectIA setup ==="
+
+          if [ ! -f /swapfile ]; then
+            dd if=/dev/zero of=/swapfile bs=1M count=2048
+            chmod 600 /swapfile; mkswap /swapfile; swapon /swapfile
+            echo '/swapfile none swap sw 0 0' >> /etc/fstab
+          fi
+
+          dnf update -y
+          dnf install -y docker git jq
+          systemctl enable --now docker
+          usermod -aG docker ec2-user
+
+          COMPOSE_VERSION="v2.27.0"
+          curl -L "https://github.com/docker/compose/releases/download/${!COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          chmod +x /usr/local/bin/docker-compose
+
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+          (cd /tmp && unzip -q awscliv2.zip && ./aws/install && rm -rf aws awscliv2.zip)
+
+          REGION=${AWS::Region}
+          APP_DIR=/home/ec2-user/intersectia
+          mkdir -p $APP_DIR && cd $APP_DIR
+
+          for r in intersectia-backend intersectia-frontend intersectia-ai; do
+            [ -d "$r" ] || git clone --branch ${GitBranch} https://github.com/ThonkasM/$r.git
+          done
+
+          DB_PASS=$(aws secretsmanager get-secret-value --secret-id ${DbSecret} --region $REGION --query SecretString --output text | jq -r .password)
+          TOKEN=$(aws secretsmanager get-secret-value --secret-id ${TokenSecret} --region $REGION --query SecretString --output text | jq -r .token)
+          DB_PASS_ENC=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$DB_PASS")
+
+          cat > .env <<ENVFILE
+          DATABASE_URL=postgresql://intersectia:${!DB_PASS_ENC}@${Database.Endpoint.Address}:5432/intersectia?schema=public
+          INTERNAL_SERVICE_TOKEN=${!TOKEN}
+          AI_INTERNAL_SERVICE_TOKEN=${!TOKEN}
+          AI_AWS_REGION=${AWS::Region}
+          AI_BEDROCK_MODEL_ID=${BedrockModelId}
+          CORS_ORIGIN=${AllowedCORSOrigin}
+          ENVFILE
+          chmod 600 .env; chown ec2-user:ec2-user .env
+
+          cat > docker-compose.yml <<'EOF'
+          services:
+            ai:
+              build: ./intersectia-ai
+              restart: unless-stopped
+              env_file: .env
+            backend:
+              build: ./intersectia-backend
+              restart: unless-stopped
+              env_file: .env
+              environment:
+                PORT: "3000"
+                AI_SERVICE_URL: http://ai:8000
+              command: sh -c "npx prisma migrate deploy && node dist/main"
+              depends_on: [ai]
+            frontend:
+              build: ./intersectia-frontend
+              restart: unless-stopped
+              depends_on: [backend]
+              ports: ["80:80"]
+          EOF
+
+          su ec2-user -c "cd $APP_DIR && docker-compose up -d --build"
+
+          echo "=== Listo: http://CloudFrontURL/ ==="
+
+  EIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      InstanceId: !Ref EC2Instance
+      EIP: !Ref ElasticIP
+
+  # ===================== CloudFront (HTTPS sin dominio) =====================
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    DependsOn: EIPAssociation
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub '${EnvironmentName} IntersectIA'
+        PriceClass: PriceClass_100
+        HttpVersion: http2
+        Origins:
+          - Id: EC2Origin
+            DomainName: !GetAtt EC2Instance.PublicDnsName
+            CustomOriginConfig:
+              HTTPPort: 80
+              OriginProtocolPolicy: http-only
+              OriginResponseTimeout: 300
+        DefaultCacheBehavior:
+          TargetOriginId: EC2Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - DELETE
+            - GET
+            - HEAD
+            - OPTIONS
+            - PATCH
+            - POST
+            - PUT
+          CachedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          ForwardedValues:
+            QueryString: true
+            Headers:
+              - Authorization
+              - Accept
+              - Content-Type
+              - Origin
+            Cookies:
+              Forward: all
+          MinTTL: 0
+          DefaultTTL: 0
+          MaxTTL: 0
+          Compress: true
+        Restrictions:
+          GeoRestriction:
+            RestrictionType: none
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+
+Outputs:
+  CloudFrontURL:
+    Description: URL HTTPS publica (usar esta)
+    Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
+  EC2PublicIP:
+    Value: !Ref ElasticIP
+  EC2InstanceId:
+    Value: !Ref EC2Instance
+  SSMSessionCommand:
+    Value: !Sub 'aws ssm start-session --target ${EC2Instance} --region ${AWS::Region}'
+  DatabaseEndpoint:
+    Value: !GetAtt Database.Endpoint.Address
+  UpdateCORSReminder:
+    Description: Tras el primer deploy, poner AllowedCORSOrigin en el dominio de CloudFront y actualizar el stack.
+    Value: !Sub 'https://${CloudFrontDistribution.DomainName}'

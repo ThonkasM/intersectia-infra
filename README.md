@@ -44,6 +44,12 @@ Ver **`docs/despliegue.md` → Opción A**.
 Nota: `intersectia-infra` no tiene remoto propio; súbelo a GitHub o cópialo por `scp` a la VM
 (el script acepta `INFRA_REPO_URL` si lo publicas).
 
+## Infra con CloudFormation (EC2 + RDS + CloudFront)
+
+Alternativa a la Opción A “manual”: `infrastructure/cloudformation-ec2.yaml` aprovisiona VPC,
+EC2 (con swap), RDS PostgreSQL, Secrets Manager, IAM con **Bedrock** y **CloudFront (HTTPS sin
+dominio)**. Detalles y comandos en `docs/despliegue.md` → **Opción A+**.
+
 ## IA en la nube
 
 - `/decision`: política en memoria, **CPU**, sin LLM, junto al backend (`localhost:8000`).

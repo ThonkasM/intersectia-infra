@@ -83,6 +83,46 @@ Operación diaria (desde `intersectia-infra/`): `make up` · `make logs` · `mak
 
 ---
 
+## Opción A+ — CloudFormation (EC2 + RDS + CloudFront) — recomendada con AWS
+
+Igual que la Opción A (una EC2, un puerto 80), pero **aprovisionada con CloudFormation** y con
+**RDS gestionado + CloudFront (HTTPS sin dominio) + IAM con Bedrock**. Es el patrón que usa el
+proyecto Homy y deja el despliegue reproducible.
+
+Plantilla: `infrastructure/cloudformation-ec2.yaml`. Crea: VPC + subredes, **EC2** (Amazon Linux
+2023, con swap), **RDS PostgreSQL** privado, **Secrets Manager** (contraseña de DB y token interno),
+**IAM instance role** (Secrets, CloudWatch, SSM y **Bedrock `bedrock:InvokeModel`** acotado al
+inference-profile), **Elastic IP** y **CloudFront** (viewer HTTPS → origin HTTP en :80).
+
+La EC2 (user-data) instala Docker + compose, clona los 3 repos (rama `v2`), genera el `.env` desde
+Secrets Manager, escribe un `docker-compose.yml` (backend + IA + frontend, usando RDS) y compila/levanta.
+
+```bash
+aws cloudformation create-stack \
+  --stack-name intersectia \
+  --template-body file://infrastructure/cloudformation-ec2.yaml \
+  --capabilities CAPABILITY_IAM \
+  --region us-east-1 \
+  --parameters \
+    ParameterKey=EnvironmentName,ParameterValue=production \
+    ParameterKey=InstanceType,ParameterValue=t3.small \
+    ParameterKey=GitBranch,ParameterValue=v2
+
+# Seguir el avance y obtener la URL:
+aws cloudformation describe-stacks --stack-name intersectia --region us-east-1 \
+  --query "Stacks[0].Outputs"
+```
+
+- Usar la URL de **CloudFront** (HTTPS) → evita *mixed content* sin dominio propio.
+- Tras el primer deploy, poner `AllowedCORSOrigin` = dominio de CloudFront y actualizar el stack.
+- Acceso a la VM **sin SSH**: `aws ssm start-session --target <InstanceId>`.
+- **Bedrock**: habilitar el modelo en la consola (Model access); si no, el chat degrada offline.
+- **Requisito de compilación**: las imágenes se compilan **en la instancia** (por eso `t3.small` + swap).
+- Costo: como la Opción A **+ RDS** (~$13/mes) **+ CloudFront** (centavos). Para el mínimo absoluto,
+  usar el `docker-compose.yml` de la Opción A (Postgres en contenedor, sin RDS/CloudFront).
+
+---
+
 ## Opción B — AWS gestionado (recomendado para la nube)
 
 ### 1. Imágenes en ECR
