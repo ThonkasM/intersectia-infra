@@ -139,84 +139,57 @@ Con `make`: `make cloud-up` · `make cloud-outputs` · `make cloud-update ID=i-x
 
 ---
 
-## Opción B — AWS gestionado (recomendado para la nube)
+## Opción B — AWS gestionado (Terraform: S3+CloudFront + ECS Fargate + RDS)
 
-### 1. Imágenes en ECR
-
-```bash
-aws ecr create-repository --repository-name intersectia-backend
-aws ecr create-repository --repository-name intersectia-ai
-aws ecr create-repository --repository-name intersectia-frontend
-
-# Login y push (tag inmutable = commit SHA)
-aws ecr get-login-password | docker login --username AWS --password-stdin <account>.dkr.ecr.<region>.amazonaws.com
-docker build -t <account>.dkr.ecr.<region>.amazonaws.com/intersectia-backend:$(git -C ../intersectia-backend rev-parse --short HEAD) ../intersectia-backend
-docker push <account>.dkr.ecr.<region>.amazonaws.com/intersectia-backend:<tag>
-```
-
-### 2. Infraestructura con Terraform
+### Deploy en un comando
 
 ```bash
-cd terraform
-cp terraform.tfvars.example terraform.tfvars   # ajusta región, cuenta, etc.
-terraform init
-terraform plan
-terraform apply
+cd intersectia-infra
+./deploy/terraform.sh up        # infra + imagenes (ECR) + servicio ECS + frontend (S3) + migraciones
+./deploy/terraform.sh outputs   # ver salidas (URL de CloudFront, etc.)
+./deploy/terraform.sh destroy   # eliminar todo
 ```
 
-Crea VPC/subredes, ECR, Secrets Manager, RDS, el clúster y servicio ECS, el ALB y el bucket + CloudFront del frontend.
-
-### 3. Frontend estático a S3
+Actualizar solo una parte (sin tocar el resto):
 
 ```bash
-cd ../intersectia-frontend
-NEXT_PUBLIC_WS_URL="https://<alb-dns>" NEXT_PUBLIC_API_URL="https://<alb-dns>" npm run build
-aws s3 sync out/ s3://<bucket-frontend>/ --delete
-aws cloudfront create-invalidation --distribution-id <id> --paths "/*"
+./deploy/terraform.sh update-frontend   # rebuild frontend + sync a S3 + invalidacion
+./deploy/terraform.sh update-backend    # rebuild backend + nuevo deployment ECS
+./deploy/terraform.sh update-ai         # idem IA
 ```
 
-### 4. Migraciones de base de datos
+Pasos internos (por si se corren por separado): `platform` (fase 1: ECR/RDS/ALB/CloudFront/S3/Secrets),
+`images` (build+push a ECR), `services` (fase 2: task definition + servicio ECS), `frontend`, `migrate`.
 
-No se corren en el contenedor de producción que atiende tráfico. Usa una **task ECS one-off** con la misma task definition y security group:
+### Cómo queda la red / HTTPS
 
-```bash
-aws ecs run-task --cluster intersectia --task-definition intersectia-backend \
-  --launch-type FARGATE --network-configuration '...' \
-  --overrides '{"containerOverrides":[{"name":"backend","command":["npx","prisma","migrate","deploy"]}]}'
-```
+CloudFront sirve el frontend desde S3 y **enruta `/socket.io/*`, `/ai/*` y `/metrics/*` al ALB**
+(origen HTTP). El frontend usa **URLs relativas** (mismo origen) → **sin mixed content y sin dominio
+propio**. Una función de CloudFront reescribe `/demo` → `/demo.html` (export estático de Next).
 
-### 5. CI/CD con GitHub Actions + OIDC
+### CI/CD con GitHub Actions + OIDC (opcional)
 
-Cada repo incluye un workflow que, al hacer push a `main`:
-
-1. corre lint y tests,
-2. construye y publica la imagen con tag = SHA,
-3. registra una nueva revisión de la task definition,
-4. actualiza el servicio ECS y espera estabilidad,
-5. invalida CloudFront (frontend).
-
-La autenticación usa **OIDC** (`permissions: id-token: write`), sin claves de AWS de larga duración. El rol IAM de Terraform confía solo en el repositorio y la rama indicados.
+Cada repo trae un workflow de ejemplo que, al hacer push, corre tests, publica la imagen con tag =
+SHA, registra una nueva revisión de la task definition, actualiza el servicio ECS e invalida CloudFront.
+La autenticación usa **OIDC** (`permissions: id-token: write`), sin claves de AWS de larga duración.
 
 ---
 
-### Estado y limitaciones de la Opción B (Terraform)
+### Estado de la Opción B (Terraform)
 
-El Terraform es un **esqueleto funcional** (no listo para producción sin completar esto):
+- **HTTPS / mixed content**: **resuelto** — CloudFront enruta la API/WebSocket al ALB y el frontend
+  usa URLs relativas (mismo origen).
+- **Apply en dos fases**: **automatizado** por `deploy/terraform.sh up` (variable `deploy_services`).
+- **Migraciones**: **automatizado** (`migrate`, task ECS one-off; la IA se overridea para que la task termine).
+- **Sticky sessions**: configurada en el target group (soporta `desired_count > 1`).
+- **Frontend**: build con URLs relativas → no hay que hornear dominios.
 
-- **HTTPS / mixed content**: el frontend (CloudFront HTTPS) apunta al ALB **HTTP**; el navegador
-  bloquea `http://…` desde una página HTTPS. Falta **HTTPS en el ALB (ACM + dominio)** o **enrutar
-  la API/WebSocket por CloudFront** al ALB.
-- **Apply en dos fases**: el servicio ECS necesita que las imágenes ya existan en ECR → aplicar con
-  `deploy_services=false`, subir imágenes y volver a aplicar.
-- **Migraciones**: correr `prisma migrate deploy` como **task ECS one-off** (no en el contenedor que sirve).
-- **Env del frontend**: `NEXT_PUBLIC_*` se hornean **antes** de `npm run build` y deben apuntar al
-  dominio de CloudFront/ALB.
-- **Sticky sessions**: con `desired_count > 1`, activar **stickiness** (cada task guarda sesiones en memoria).
-- **VPC/red**: usa la **VPC por defecto**; para producción, VPC propia y subredes privadas + NAT.
-- **Logs**: el Terraform no configura CloudWatch.
+Pendiente para **producción real** (opcional): VPC propia + subredes privadas + NAT; HA
+(Multi-AZ / `desired_count`); logs a CloudWatch (el Terraform no los configura, a diferencia del path
+de EC2); backend remoto de Terraform con lock; HTTPS con dominio propio (ACM + ALB 443).
 
-> En resumen: **A+ (CloudFormation) es la ruta lista y recomendada**; **B (Terraform)** es el camino
-> “producción” a completar. No mezclar ambas.
+> En resumen: **A+ (CloudFormation)** es la ruta mínima y recomendada; **B (Terraform)** queda lista
+> para escala/producción. No mezclar ambas.
 
 ## Verificación post-despliegue
 

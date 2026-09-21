@@ -8,3 +8,6 @@
 crash.log
 override.tf
 override.tf.json
+terraform/images.env
+terraform/*.tfplan
+terraform/.terraform/

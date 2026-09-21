@@ -14,13 +14,21 @@ variable "project" {
 }
 
 variable "backend_image" {
-  description = "URI de la imagen del backend en ECR (con tag)"
+  description = "URI de la imagen del backend en ECR (con tag). Requerido al crear el servicio (deploy_services=true)."
   type        = string
+  default     = ""
 }
 
 variable "ai_image" {
-  description = "URI de la imagen del AI en ECR (con tag)"
+  description = "URI de la imagen del AI en ECR (con tag). Requerido al crear el servicio (deploy_services=true)."
   type        = string
+  default     = ""
+}
+
+variable "deploy_services" {
+  description = "Crear el task definition y el servicio ECS (2a fase, despues de subir las imagenes a ECR)."
+  type        = bool
+  default     = false
 }
 
 variable "db_instance_class" {

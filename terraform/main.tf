@@ -168,6 +168,7 @@ resource "aws_iam_role_policy" "task_bedrock" {
 }
 
 resource "aws_ecs_task_definition" "this" {
+  count                    = var.deploy_services ? 1 : 0
   family                   = local.name
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
@@ -178,9 +179,9 @@ resource "aws_ecs_task_definition" "this" {
 
   container_definitions = jsonencode([
     {
-      name      = "ai"
-      image     = var.ai_image
-      essential = true
+      name         = "ai"
+      image        = var.ai_image
+      essential    = true
       portMappings = [{ containerPort = 8000, protocol = "tcp" }]
       environment = [
         { name = "AI_AWS_REGION", value = var.aws_region },
@@ -196,9 +197,9 @@ resource "aws_ecs_task_definition" "this" {
       }
     },
     {
-      name      = "backend"
-      image     = var.backend_image
-      essential = true
+      name         = "backend"
+      image        = var.backend_image
+      essential    = true
       portMappings = [{ containerPort = 3000, protocol = "tcp" }]
       environment = [
         { name = "PORT", value = "3000" },
@@ -275,6 +276,14 @@ resource "aws_lb_target_group" "backend" {
   vpc_id      = data.aws_vpc.default.id
   target_type = "ip"
 
+  # Necesario con desired_count > 1: las sesiones de socket.io viven en memoria
+  # de cada task, asi que el cliente debe quedar pegado a su task.
+  stickiness {
+    type            = "lb_cookie"
+    cookie_duration = 3600
+    enabled         = true
+  }
+
   health_check {
     path                = "/"
     healthy_threshold   = 2
@@ -295,9 +304,10 @@ resource "aws_lb_listener" "http" {
 }
 
 resource "aws_ecs_service" "this" {
+  count           = var.deploy_services ? 1 : 0
   name            = local.name
   cluster         = aws_ecs_cluster.this.id
-  task_definition = aws_ecs_task_definition.this.arn
+  task_definition = aws_ecs_task_definition.this[0].arn
   desired_count   = var.desired_count
   launch_type     = "FARGATE"
 
@@ -322,7 +332,8 @@ resource "aws_ecs_service" "this" {
 # --- Frontend estatico: S3 + CloudFront ------------------------------------
 
 resource "aws_s3_bucket" "frontend" {
-  bucket = "${local.name}-frontend-${data.aws_caller_identity.current.account_id}"
+  bucket        = "${local.name}-frontend-${data.aws_caller_identity.current.account_id}"
+  force_destroy = true
 }
 
 resource "aws_cloudfront_origin_access_control" "frontend" {
@@ -332,15 +343,73 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
   signing_protocol                  = "sigv4"
 }
 
+# Reescribe /demo -> /demo.html (export estatico de Next) sin extension.
+resource "aws_cloudfront_function" "rewrite" {
+  name    = "${local.name}-rewrite"
+  runtime = "cloudfront-js-2.0"
+  comment = "Append .html para rutas del export de Next"
+  publish = true
+  code    = <<-EOT
+    function handler(event) {
+      var req = event.request;
+      var uri = req.uri;
+      if (uri.endsWith('/')) {
+        req.uri = uri + 'index.html';
+      } else if (uri.indexOf('.') === -1) {
+        req.uri = uri + '.html';
+      }
+      return req;
+    }
+  EOT
+}
+
 resource "aws_cloudfront_distribution" "frontend" {
   enabled             = true
   default_root_object = "index.html"
   aliases             = []
+  price_class         = "PriceClass_100"
 
+  # Origen 1: frontend estatico en S3 (privado, con OAC).
   origin {
     domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
     origin_id                = "s3-frontend"
     origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
+  }
+
+  # Origen 2: backend (API + WebSocket) en el ALB.
+  origin {
+    domain_name = aws_lb.this.dns_name
+    origin_id   = "alb-api"
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+      origin_read_timeout    = 60
+    }
+  }
+
+  # Rutas del backend -> ALB (sin cache). El frontend usa URLs relativas
+  # (mismo origen) asi que /socket.io y /ai pasan por CloudFront.
+  dynamic "ordered_cache_behavior" {
+    for_each = ["/socket.io/*", "/ai/*", "/metrics/*"]
+    content {
+      path_pattern           = ordered_cache_behavior.value
+      target_origin_id       = "alb-api"
+      viewer_protocol_policy = "redirect-to-https"
+      allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+      cached_methods         = ["GET", "HEAD"]
+      forwarded_values {
+        query_string = true
+        headers      = ["*"]
+        cookies {
+          forward = "all"
+        }
+      }
+      min_ttl     = 0
+      default_ttl = 0
+      max_ttl     = 0
+    }
   }
 
   default_cache_behavior {
@@ -353,6 +422,10 @@ resource "aws_cloudfront_distribution" "frontend" {
       cookies {
         forward = "none"
       }
+    }
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.rewrite.arn
     }
   }
 

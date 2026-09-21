@@ -30,9 +30,9 @@ misma cuenta/región (crearían recursos duplicados: dos RDS, dos CloudFront, et
 | **A+** | **CloudFormation**: EC2 + RDS + CloudFront + IAM/Bedrock | demo con **HTTPS** y DB gestionada, reproducible | ~$30/mes | `infrastructure/cloudformation-ec2.yaml` + `deploy/ec2-cfn.sh` |
 | **B** | **Terraform**: S3+CloudFront (front) + **ECS Fargate** (backend+IA) + RDS + ALB | producción/escala | ~$50–60/mes | `terraform/` |
 
-**Recomendado para este proyecto (taller):** **A+** con `./deploy/ec2-cfn.sh up`.
-La **B (Terraform)** queda como camino “producción”, pero es un **esqueleto** (ver limitaciones en
-`docs/despliegue.md`), no lo uses sin completar los pendientes.
+**Recomendado para el taller:** **A+** con `./deploy/ec2-cfn.sh up`.
+Para escala/producción: **B** con `./deploy/terraform.sh up` (infra + imágenes + servicio + frontend + migraciones).
+Ambas ya funcionan en un comando; elige **una**.
 
 ## Arranque rápido local / VM única (Docker)
 
