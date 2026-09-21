@@ -44,6 +44,13 @@ Ver **`docs/despliegue.md` → Opción A**.
 Nota: `intersectia-infra` no tiene remoto propio; súbelo a GitHub o cópialo por `scp` a la VM
 (el script acepta `INFRA_REPO_URL` si lo publicas).
 
+## IA en la nube
+
+- `/decision`: política en memoria, **CPU**, sin LLM, junto al backend (`localhost:8000`).
+- `/chat`: RAG local + **Amazon Bedrock** para la generación. Requiere credenciales IAM
+  (`bedrock:InvokeModel`) y acceso al modelo; sin eso **degrada offline**. En EC2 se habilita con
+  `deploy/ec2-bedrock-iam.sh` (instance profile + IMDS hop limit 2). Ver `docs/ia-en-cloud.md`.
+
 ## Despliegue AWS (resumen)
 
 Arquitectura mínima pensada para una demo de taller universitario:

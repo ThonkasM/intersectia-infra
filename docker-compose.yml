@@ -21,6 +21,7 @@ services:
     environment:
       AI_INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-dev-internal-token}
       AI_AWS_REGION: ${AWS_REGION:-us-east-1}
+      AI_BEDROCK_MODEL_ID: ${AI_BEDROCK_MODEL_ID:-us.meta.llama3-1-8b-instruct-v1:0}
     expose:
       - "8000"
 

@@ -149,6 +149,8 @@ La autenticación usa **OIDC** (`permissions: id-token: write`), sin claves de A
 - `GET http://<alb-dns>/metrics/summary` → JSON con métricas.
 - Abrir la URL de CloudFront → landing; ir a `/demo` y comprobar que el HUD muestra "conectado".
 - `curl http://<alb-dns>/ai/chat/topics` → lista de temas.
+- Chat: `curl -s -X POST http://<IP>/ai/chat -H 'Content-Type: application/json' -d '{"message":"¿Qué es IoT?"}'`
+  (funciona offline; para usar el LLM de Bedrock ver `docs/ia-en-cloud.md`).
 
 ## Rollback
 
