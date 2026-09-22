@@ -1,5 +1,9 @@
 # Guion de demo (AWS)
 
+> **Despliegue actual** (cuenta `855158726945`): web y API en
+> `https://d18bljllhxk5n7.cloudfront.net` (HTTPS, mismo origen para landing, demo,
+> REST y WS). EC2 `i-0761147a7f41fa5d5` (acceso por SSM) · RDS `production-intersectia-db` (us-east-1).
+
 ## Pre-chequeos (5 min antes)
 
 ```bash
@@ -40,7 +44,7 @@ aws bedrock get-foundation-model-availability \
 
 ```bash
 cd intersectia-infra
-ID=i-0e46bb692142a1e29
+ID=i-0761147a7f41fa5d5
 
 # Actualizar un servicio (git pull + rebuild en la EC2, por SSM)
 ./deploy/ec2-update.sh "$ID" frontend     # o backend | ai | all
